@@ -12,9 +12,15 @@ module LocalTimeHelper
   end
 
   def local_date(time, options = nil)
+    time = utc_time(time)
+
     options, format = extract_options_and_value(options, :format)
-    options[:format] = format || LocalTime.default_date_format
-    local_time time, options
+    format = find_date_format(format)
+
+    options[:data] ||= {}
+    options[:data].merge! local: :time, type: :date, format: format
+
+    time_tag time, time.strftime(format), options
   end
 
   def local_relative_time(time, options = nil)
@@ -42,19 +48,37 @@ module LocalTimeHelper
   end
 
   private
+
     def find_time_format(format)
+      find_format(format, find_i18n_time_format(format), find_ruby_time_format(format), LocalTime.default_time_format)
+    end
+
+    def find_date_format(format)
+      find_format(format, find_i18n_date_format(format), find_ruby_date_format(format), LocalTime.default_date_format)
+    end
+
+    def find_format(format, i18n_format, ruby_format, default_format)
       if format.is_a?(Symbol)
-        if (i18n_format = I18n.t("time.formats.#{format}", default: [:"date.formats.#{format}", ''])).present?
+        if i18n_format
           i18n_format
-        elsif (date_format = Time::DATE_FORMATS[format] || Date::DATE_FORMATS[format])
-          date_format.is_a?(Proc) ? LocalTime.default_time_format : date_format
+        elsif ruby_format
+          ruby_format.is_a?(Proc) ? default_format : ruby_format
         else
-          LocalTime.default_time_format
+          default_format
         end
       else
-        format.presence || LocalTime.default_time_format
+        format.presence || default_format
       end
     end
+
+    def find_i18n_time_format(format); find_i18n_format(format, :time); end
+    def find_i18n_date_format(format); find_i18n_format(format, :date); end
+    def find_i18n_format(format, type)
+      I18n.t("#{type}.formats.#{format}", default: "").presence
+    end
+
+    def find_ruby_time_format(format); Time::DATE_FORMATS[format]; end
+    def find_ruby_date_format(format); Date::DATE_FORMATS[format]; end
 
     def extract_options_and_value(options, value_key = nil)
       case options
